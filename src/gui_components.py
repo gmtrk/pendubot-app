@@ -79,14 +79,24 @@ def setup_control_panel(parent_frame, app_instance):
     """Creates the control panel widgets."""
     row_idx = 0
 
-    # --- Starting Position ---
-    ttk.Label(parent_frame, text="Starting Position:").grid(row=row_idx, column=0, columnspan=2, sticky=tk.W, pady=5)
+    # --- Starting Position / Target Configuration ---
+    ttk.Label(parent_frame, text="Target Configuration:").grid(row=row_idx, column=0, columnspan=2, sticky=tk.W, pady=5)
     row_idx += 1
-    app_instance.start_pos_var = tk.StringVar(value="Near Down-Up") # Default near stable point
-    start_positions = ["Near Down-Up", "Near Side-Up (R)", "Near Side-Up (L)", "Fully Down", "Near Up-Up (Unstable)"]
+    # Default to the classic Up-Up configuration (L1=pi, L2=0)
+    app_instance.start_pos_var = tk.StringVar(value="Target (pi, 0) [L1 Up, L2 Align]")
+    # Updated list reflecting standard angles and desired configurations
+    start_positions = [
+        "Target (pi, 0) [L1 Up, L2 Align]",     # Visually Up-Up
+        "Target (0, pi) [L1 Down, L2 World Up]", # Visually Down-Up
+        "Target (3pi/4, pi/4) [L2 World Up]",
+        "Target (-3pi/4, -pi/4) [L2 World Up]",
+        "Target (0, 0) [Fully Down]"          # Visually Down-Down (Stable hanging)
+        ]
     for i, pos in enumerate(start_positions):
-        rb = ttk.Radiobutton(parent_frame, text=pos, variable=app_instance.start_pos_var, value=pos)
-        # Grid layout wraps radio buttons nicely
+        # Use lambda to immediately call apply_parameters when radio button changes
+        # This makes the Apply button redundant but simplifies interaction
+        rb = ttk.Radiobutton(parent_frame, text=pos, variable=app_instance.start_pos_var, value=pos,
+                              command=app_instance.apply_parameters) # Trigger reset on selection
         rb.grid(row=row_idx + i // 2, column=i % 2, sticky=tk.W, padx=5)
     row_idx += (len(start_positions) + 1) // 2
 
@@ -100,15 +110,24 @@ def setup_control_panel(parent_frame, app_instance):
     param_frame = ttk.Frame(parent_frame) # Frame for better alignment
     param_frame.grid(row=row_idx, column=0, columnspan=2, sticky='ew')
     param_labels = ["m1 (kg):", "l1 (m):", "m2 (kg):", "l2 (m):"]
-    param_vars = [tk.StringVar(value=str(app_instance.m1)),
-                   tk.StringVar(value=str(app_instance.l1)),
-                   tk.StringVar(value=str(app_instance.m2)),
-                   tk.StringVar(value=str(app_instance.l2))]
+    # Initialize StringVars with default values from app_instance if they exist, else use defaults
+    m1_val = getattr(app_instance, 'm1', 1.0)
+    l1_val = getattr(app_instance, 'l1', 1.0)
+    m2_val = getattr(app_instance, 'm2', 1.0)
+    l2_val = getattr(app_instance, 'l2', 1.0)
+    param_vars = [tk.StringVar(value=str(m1_val)),
+                   tk.StringVar(value=str(l1_val)),
+                   tk.StringVar(value=str(m2_val)),
+                   tk.StringVar(value=str(l2_val))]
     app_instance.m1_var, app_instance.l1_var, app_instance.m2_var, app_instance.l2_var = param_vars
 
     for i, label in enumerate(param_labels):
         ttk.Label(param_frame, text=label).grid(row=i, column=0, sticky=tk.W, padx=5, pady=1)
-        ttk.Entry(param_frame, textvariable=param_vars[i], width=10).grid(row=i, column=1, sticky=tk.W, padx=5, pady=1)
+        entry = ttk.Entry(param_frame, textvariable=param_vars[i], width=10)
+        entry.grid(row=i, column=1, sticky=tk.W, padx=5, pady=1)
+        # Add binding to trigger apply_parameters on Enter key press in Entry fields
+        entry.bind('<Return>', lambda event: app_instance.apply_parameters())
+
     row_idx += 1
 
 
@@ -121,15 +140,16 @@ def setup_control_panel(parent_frame, app_instance):
     app_instance.control_method_var = tk.StringVar(value="LQR") # Default to LQR
     control_methods = ["None", "PID", "LQR"]
     for method in control_methods:
-        rb = ttk.Radiobutton(parent_frame, text=method, variable=app_instance.control_method_var, value=method)
+        rb = ttk.Radiobutton(parent_frame, text=method, variable=app_instance.control_method_var, value=method,
+                              command=app_instance.apply_parameters) # Trigger reset on selection
         rb.grid(row=row_idx, column=0, columnspan=2, sticky=tk.W, padx=5)
         row_idx += 1
 
 
-    # --- Apply Button ---
+    # --- Apply Button (Optional now, but can keep) ---
     ttk.Separator(parent_frame, orient=tk.HORIZONTAL).grid(row=row_idx, column=0, columnspan=2, sticky="ew", pady=10)
     row_idx += 1
     # Assign button to app instance so command can be set later
-    app_instance.apply_button = ttk.Button(parent_frame, text="Apply & Reset")
+    app_instance.apply_button = ttk.Button(parent_frame, text="Apply & Reset (or Select Above)", command=app_instance.apply_parameters)
     app_instance.apply_button.grid(row=row_idx, column=0, columnspan=2, pady=10)
     row_idx += 1
