@@ -76,30 +76,25 @@ def setup_plotting_area(parent_frame, app_instance):
     app_instance.plot_dq2 = plot_dq2
 
 def setup_control_panel(parent_frame, app_instance):
-    """Creates the control panel widgets."""
+    """Creates the control panel widgets, including dynamic PID tuning."""
     row_idx = 0
 
     # --- Starting Position / Target Configuration ---
     ttk.Label(parent_frame, text="Target Configuration:").grid(row=row_idx, column=0, columnspan=2, sticky=tk.W, pady=5)
     row_idx += 1
-    # Default to the classic Up-Up configuration (L1=pi, L2=0)
     app_instance.start_pos_var = tk.StringVar(value="Target (pi, 0) [L1 Up, L2 Align]")
-    # Updated list reflecting standard angles and desired configurations
     start_positions = [
-        "Target (pi, 0) [L1 Up, L2 Align]",     # Visually Up-Up
-        "Target (0, pi) [L1 Down, L2 World Up]", # Visually Down-Up
+        "Target (pi, 0) [L1 Up, L2 Align]",
+        "Target (0, pi) [L1 Down, L2 World Up]",
         "Target (3pi/4, pi/4) [L2 World Up]",
         "Target (-3pi/4, -pi/4) [L2 World Up]",
-        "Target (0, 0) [Fully Down]"          # Visually Down-Down (Stable hanging)
+        "Target (0, 0) [Fully Down]"
         ]
     for i, pos in enumerate(start_positions):
-        # Use lambda to immediately call apply_parameters when radio button changes
-        # This makes the Apply button redundant but simplifies interaction
         rb = ttk.Radiobutton(parent_frame, text=pos, variable=app_instance.start_pos_var, value=pos,
-                              command=app_instance.apply_parameters) # Trigger reset on selection
+                              command=app_instance.apply_parameters) # Trigger reset
         rb.grid(row=row_idx + i // 2, column=i % 2, sticky=tk.W, padx=5)
     row_idx += (len(start_positions) + 1) // 2
-
 
     # --- Parameters ---
     ttk.Separator(parent_frame, orient=tk.HORIZONTAL).grid(row=row_idx, column=0, columnspan=2, sticky="ew", pady=10)
@@ -107,29 +102,24 @@ def setup_control_panel(parent_frame, app_instance):
     ttk.Label(parent_frame, text="Parameters:").grid(row=row_idx, column=0, columnspan=2, sticky=tk.W, pady=(5,2))
     row_idx += 1
 
-    param_frame = ttk.Frame(parent_frame) # Frame for better alignment
+    param_frame = ttk.Frame(parent_frame)
     param_frame.grid(row=row_idx, column=0, columnspan=2, sticky='ew')
     param_labels = ["m1 (kg):", "l1 (m):", "m2 (kg):", "l2 (m):"]
-    # Initialize StringVars with default values from app_instance if they exist, else use defaults
-    m1_val = getattr(app_instance, 'm1', 1.0)
-    l1_val = getattr(app_instance, 'l1', 1.0)
-    m2_val = getattr(app_instance, 'm2', 1.0)
-    l2_val = getattr(app_instance, 'l2', 1.0)
-    param_vars = [tk.StringVar(value=str(m1_val)),
-                   tk.StringVar(value=str(l1_val)),
-                   tk.StringVar(value=str(m2_val)),
-                   tk.StringVar(value=str(l2_val))]
+    # Use getattr to safely get initial values from app_instance
+    param_vars = [tk.StringVar(value=str(getattr(app_instance, 'm1', 1.0))),
+                   tk.StringVar(value=str(getattr(app_instance, 'l1', 1.0))),
+                   tk.StringVar(value=str(getattr(app_instance, 'm2', 1.0))),
+                   tk.StringVar(value=str(getattr(app_instance, 'l2', 1.0)))]
     app_instance.m1_var, app_instance.l1_var, app_instance.m2_var, app_instance.l2_var = param_vars
 
     for i, label in enumerate(param_labels):
         ttk.Label(param_frame, text=label).grid(row=i, column=0, sticky=tk.W, padx=5, pady=1)
         entry = ttk.Entry(param_frame, textvariable=param_vars[i], width=10)
         entry.grid(row=i, column=1, sticky=tk.W, padx=5, pady=1)
-        # Add binding to trigger apply_parameters on Enter key press in Entry fields
         entry.bind('<Return>', lambda event: app_instance.apply_parameters())
-
+        # Optional: Add trace to update on any change, not just Enter/Apply button
+        # param_vars[i].trace_add("write", lambda *args: app_instance.apply_parameters())
     row_idx += 1
-
 
     # --- Control Method ---
     ttk.Separator(parent_frame, orient=tk.HORIZONTAL).grid(row=row_idx, column=0, columnspan=2, sticky="ew", pady=10)
@@ -137,19 +127,54 @@ def setup_control_panel(parent_frame, app_instance):
     ttk.Label(parent_frame, text="Control Method:").grid(row=row_idx, column=0, columnspan=2, sticky=tk.W, pady=(5,2))
     row_idx += 1
 
-    app_instance.control_method_var = tk.StringVar(value="LQR") # Default to LQR
+    app_instance.control_method_var = tk.StringVar(value="LQR")
     control_methods = ["None", "PID", "LQR"]
     for method in control_methods:
+        # --- Link radio button command to update PID visibility AND apply params ---
         rb = ttk.Radiobutton(parent_frame, text=method, variable=app_instance.control_method_var, value=method,
-                              command=app_instance.apply_parameters) # Trigger reset on selection
+                              command=lambda: (app_instance.update_pid_widgets_visibility(), app_instance.apply_parameters()))
         rb.grid(row=row_idx, column=0, columnspan=2, sticky=tk.W, padx=5)
         row_idx += 1
 
+    # --- PID Tuning Frame (Initially hidden potentially) ---
+    # Create a frame to hold PID widgets for easy show/hide
+    app_instance.pid_tune_frame = ttk.Frame(parent_frame)
+    # Place it in the grid, visibility controlled later
+    app_instance.pid_tune_frame.grid(row=row_idx, column=0, columnspan=2, sticky="ew", pady=(5,0))
+    row_idx += 1
 
-    # --- Apply Button (Optional now, but can keep) ---
+    # Define PID default values safely (get from app_instance if already set)
+    default_kp = getattr(app_instance, 'kp_val', 30.0)
+    default_ki = getattr(app_instance, 'ki_val', 5.0)
+    default_kd = getattr(app_instance, 'kd_val', 10.0)
+
+    # StringVars for PID gains (initialize in app_instance.__init__)
+    if not hasattr(app_instance, 'kp_var'): app_instance.kp_var = tk.StringVar(value=str(default_kp))
+    if not hasattr(app_instance, 'ki_var'): app_instance.ki_var = tk.StringVar(value=str(default_ki))
+    if not hasattr(app_instance, 'kd_var'): app_instance.kd_var = tk.StringVar(value=str(default_kd))
+
+    # Create PID Spinboxes and Labels inside the frame
+    ttk.Label(app_instance.pid_tune_frame, text="Kp:").grid(row=0, column=0, sticky=tk.W, padx=5)
+    kp_spinbox = tk.Spinbox(app_instance.pid_tune_frame, from_=0.0, to=1000.0, increment=1.0, width=8,
+                            textvariable=app_instance.kp_var, command=app_instance.apply_parameters_pid_tune) # Trigger update on arrow click
+    kp_spinbox.grid(row=0, column=1, sticky=tk.W, padx=5)
+    kp_spinbox.bind('<Return>', lambda event: app_instance.apply_parameters()) # Trigger update on Enter
+
+    ttk.Label(app_instance.pid_tune_frame, text="Ki:").grid(row=1, column=0, sticky=tk.W, padx=5)
+    ki_spinbox = tk.Spinbox(app_instance.pid_tune_frame, from_=0.0, to=1000.0, increment=0.5, width=8,
+                            textvariable=app_instance.ki_var, command=app_instance.apply_parameters_pid_tune)
+    ki_spinbox.grid(row=1, column=1, sticky=tk.W, padx=5)
+    ki_spinbox.bind('<Return>', lambda event: app_instance.apply_parameters())
+
+    ttk.Label(app_instance.pid_tune_frame, text="Kd:").grid(row=2, column=0, sticky=tk.W, padx=5)
+    kd_spinbox = tk.Spinbox(app_instance.pid_tune_frame, from_=0.0, to=1000.0, increment=0.5, width=8,
+                            textvariable=app_instance.kd_var, command=app_instance.apply_parameters_pid_tune)
+    kd_spinbox.grid(row=2, column=1, sticky=tk.W, padx=5)
+    kd_spinbox.bind('<Return>', lambda event: app_instance.apply_parameters())
+
+    # --- Apply Button ---
     ttk.Separator(parent_frame, orient=tk.HORIZONTAL).grid(row=row_idx, column=0, columnspan=2, sticky="ew", pady=10)
     row_idx += 1
-    # Assign button to app instance so command can be set later
-    app_instance.apply_button = ttk.Button(parent_frame, text="Apply & Reset (or Select Above)", command=app_instance.apply_parameters)
+    app_instance.apply_button = ttk.Button(parent_frame, text="Apply & Reset", command=app_instance.apply_parameters)
     app_instance.apply_button.grid(row=row_idx, column=0, columnspan=2, pady=10)
     row_idx += 1
