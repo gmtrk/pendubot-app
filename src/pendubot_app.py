@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import traceback
 
-from pendubot_dynamics import pendubot_dynamics, G  # Ensure G is imported
+from pendubot_dynamics import pendubot_dynamics, G
 from controllers import (control_none, control_pid, control_lqr,
                          calculate_lqr_gain, DEFAULT_CONTROLLER_PARAMS,
                          calculate_equilibrium_torque)
@@ -18,7 +18,7 @@ from gui_components import (setup_visualization_area, setup_plotting_area,
 
 
 class PendubotApp:
-    ABNORMAL_ACCELERATION_THRESHOLD = 1000.0  # rad/s^2 - Adjust as needed
+    ABNORMAL_ACCELERATION_THRESHOLD = 1000.0
 
     def __init__(self, root):
         self.root = root
@@ -31,43 +31,51 @@ class PendubotApp:
         self.l2 = 0.5
         self.lc1 = self.l1;
         self.lc2 = self.l2 / 2.0
-        self.I1 = (1 / 3) * self.m1 * self.l1 ** 2
+        self.I1 = (1 / 3) * self.m1 * self.l1 ** 2;
         self.I2 = (1 / 12) * self.m2 * self.l2 ** 2
-
-        self.dt = 0.02
-        self.simulation_time = 0.0
-        self.state = np.zeros(4)  # Standard convention
-
+        self.dt = 0.02;
+        self.simulation_time = 0.0;
+        self.state = np.zeros(4)
         self.time_history = [];
         self.q1_history = [];
         self.q2_history = []
         self.dq1_history = [];
-        self.dq2_history = []
+        self.dq2_history = [];
         self.history_length = 250
-
-        self.plot_time_window_start = 0.0
+        self.plot_time_window_start = 0.0;
         self.plot_time_window_duration = 5.0
+        self.control_method_var = tk.StringVar(value="LQR")
+        self.control_func = control_none;
+        self.current_controller_state = {};
+        self.target_state = np.zeros(4)
 
-        self.control_method_var = None
-        self.control_func = control_none
-        self.current_controller_state = {}
-        self.target_state = np.zeros(4)  # Standard convention
+        # Initialize all PID gain StringVars and corresponding float _val attributes
+        pid_defaults = DEFAULT_CONTROLLER_PARAMS['pid']
+        self.kp_q1_val = pid_defaults['Kp_q1'];
+        self.ki_q1_val = pid_defaults['Ki_q1'];
+        self.kd_q1_val = pid_defaults['Kd_q1']
+        self.kp_q2_val = pid_defaults['Kp_q2'];
+        self.ki_q2_val = pid_defaults['Ki_q2'];
+        self.kd_q2_val = pid_defaults['Kd_q2']
 
-        self.kp_val = DEFAULT_CONTROLLER_PARAMS['pid']['Kp']
-        self.ki_val = DEFAULT_CONTROLLER_PARAMS['pid']['Ki']
-        self.kd_val = DEFAULT_CONTROLLER_PARAMS['pid']['Kd']
-        self.kp_var = tk.StringVar(value=str(self.kp_val))
-        self.ki_var = tk.StringVar(value=str(self.ki_val))
-        self.kd_var = tk.StringVar(value=str(self.kd_val))
+        self.kp_q1_var = tk.StringVar(value=str(self.kp_q1_val));
+        self.ki_q1_var = tk.StringVar(value=str(self.ki_q1_val));
+        self.kd_q1_var = tk.StringVar(value=str(self.kd_q1_val))
+        self.kp_q2_var = tk.StringVar(value=str(self.kp_q2_val));
+        self.ki_q2_var = tk.StringVar(value=str(self.ki_q2_val));
+        self.kd_q2_var = tk.StringVar(value=str(self.kd_q2_val))
+        # Renaming old vars for clarity if they were used by gui_components.py (now they use direct _q2)
+        self.kp_var = self.kp_q2_var  # For backward compatibility if any old code used it (should be removed)
+        self.ki_var = self.ki_q2_var
+        self.kd_var = self.kd_q2_var
 
-        self.anim = None
-        self.running = False
+        self.anim = None;
+        self.running = False;
         self._applying_params = False
-
         self.pid_tune_frame = None
         self.setup_gui()
         self.update_pid_widgets_visibility()
-        # Event function attributes are now set locally in simulation_step
+        self.apply_parameters()  # Initial run
 
     def setup_gui(self):
         main_frame = ttk.Frame(self.root, padding="10")
@@ -81,11 +89,9 @@ class PendubotApp:
         right_frame = ttk.Frame(main_frame, padding="10", borderwidth=2, relief="groove")
         right_frame.grid(row=0, column=1, sticky=(tk.N, tk.S, tk.E, tk.W), padx=5, pady=5)
         main_frame.columnconfigure(1, weight=1)
-
-        setup_visualization_area(left_frame, self)
+        setup_visualization_area(left_frame, self);
         setup_plotting_area(left_frame, self)
         setup_control_panel(right_frame, self)
-
         left_frame.rowconfigure(0, weight=2);
         left_frame.rowconfigure(1, weight=3)
         left_frame.columnconfigure(0, weight=1)
@@ -102,7 +108,31 @@ class PendubotApp:
 
     def apply_parameters_pid_tune(self):
         if self.control_method_var and self.control_method_var.get() == "PID":
-            self.apply_parameters()
+            if not self._applying_params: self.apply_parameters()
+
+    def adjust_pid_param(self, param_key_full, amount):
+        var_to_update_str = param_key_full + "_var"  # e.g., "kp_q1_var"
+        val_attr_str = param_key_full + "_val"  # e.g., "kp_q1_val"
+
+        if not (hasattr(self, var_to_update_str) and hasattr(self, val_attr_str)):
+            print(f"Error: Unknown PID parameter key for adjustment: {param_key_full}")
+            return
+
+        var_to_update = getattr(self, var_to_update_str)
+
+        try:
+            current_value = float(var_to_update.get())
+            new_value = round(current_value + amount, 4)
+            if new_value < 0.0: new_value = 0.0
+
+            var_to_update.set(str(new_value))
+            setattr(self, val_attr_str, new_value)
+
+            self.apply_parameters_pid_tune()
+        except ValueError:
+            messagebox.showerror("PID Tuning Error", f"Current value for {param_key_full.upper()} is invalid.")
+            # Restore from internal float value
+            var_to_update.set(str(getattr(self, val_attr_str)))
 
     def get_cartesian_coords(self, q1, q2):
         x0, y0 = 0, 0;
@@ -116,8 +146,7 @@ class PendubotApp:
         if self._applying_params: return
         self._applying_params = True
         if self.anim and self.running:
-            try:
-                self.anim.event_source.stop()
+            try: self.anim.event_source.stop();
             except Exception:
                 pass
             self.anim = None
@@ -133,31 +162,24 @@ class PendubotApp:
             self.I1 = (1 / 3) * self.m1 * self.l1 ** 2;
             self.I2 = (1 / 12) * self.m2 * self.l2 ** 2
 
-            start_pos = self.start_pos_var.get()
-            # --- Initialize target_q1 and target_q2 here ---
-            q1_init, q2_init, dq1_init, dq2_init = 0.0, 0.0, 0.0, 0.0
-            target_q1, target_q2 = 0.0, 0.0  # These are the variables we will assign to
+            start_pos = self.start_pos_var.get();
+            q1_i, q2_i, dq1_i, dq2_i = 0, 0, 0, 0;
+            tq1, tq2 = 0, 0;
             p = 0.05
-
             if start_pos == "Target (pi, 0) [L1 Up, L2 Align]":
-                q1_init, q2_init = np.pi + p, 0.0 + p; target_q1, target_q2 = np.pi, 0.0
+                q1_i, q2_i = np.pi + p, 0.0 + p;tq1, tq2 = np.pi, 0.0
             elif start_pos == "Target (0, pi) [L1 Down, L2 World Up]":
-                q1_init, q2_init = 0.0 + p, np.pi - p; target_q1, target_q2 = 0.0, np.pi
+                q1_i, q2_i = 0.0 + p, np.pi - p;tq1, tq2 = 0.0, np.pi
             elif start_pos == "Target (3pi/4, pi/4) [L2 World Up]":
-                q1_init, q2_init = (3 * np.pi / 4) + p, (np.pi / 4) - p; target_q1, target_q2 = (3 * np.pi / 4), (
-                            np.pi / 4)
+                q1_i, q2_i = (3 * np.pi / 4) + p, (np.pi / 4) - p;tq1, tq2 = (3 * np.pi / 4), (np.pi / 4)
             elif start_pos == "Target (-3pi/4, -pi/4) [L2 World Up]":
-                q1_a = -3 * np.pi / 4; q1_init, q2_init = q1_a + p, (-np.pi / 4) - p; target_q1, target_q2 = q1_a, (
-                            -np.pi / 4)
+                q1_a = -3 * np.pi / 4;q1_i, q2_i = q1_a + p, (-np.pi / 4) - p;tq1, tq2 = q1_a, (-np.pi / 4)
             elif start_pos == "Target (0, 0) [Fully Down]":
-                q1_init, q2_init = 0.0 + p, 0.0 + p; target_q1, target_q2 = 0.0, 0.0
+                q1_i, q2_i = 0.0 + p, 0.0 + p;tq1, tq2 = 0.0, 0.0
             else:
-                q1_init, q2_init = np.pi + p, 0.0 + p; target_q1, target_q2 = np.pi, 0.0  # Default
-
-            self.state = np.array([q1_init, q2_init, dq1_init, dq2_init])
-            # --- Use target_q1, target_q2 here ---
-            self.target_state = np.array([target_q1, target_q2, 0.0, 0.0])
-            print(f"INFO: Target state (q1_down, q2_rel) set to: {self.target_state}")
+                q1_i, q2_i = np.pi + p, 0.0 + p;tq1, tq2 = np.pi, 0.0
+            self.state = np.array([q1_i, q2_i, dq1_i, dq2_i]);
+            self.target_state = np.array([tq1, tq2, 0, 0])
 
             self.simulation_time = 0.0;
             self.plot_time_window_start = 0.0
@@ -168,58 +190,64 @@ class PendubotApp:
             self.dq2_history = []
             method = self.control_method_var.get();
             self.current_controller_state = {}
-            # --- Use target_q1, target_q2 here ---
-            u_eq = calculate_equilibrium_torque(target_q1, target_q2, self.m1, self.l1, self.m2, self.l2, self.lc1,
-                                                self.lc2)
-            print(f"INFO: Calculated u_eq = {u_eq:.4f} for target state.")
+            u_eq = calculate_equilibrium_torque(tq1, tq2, self.m1, self.l1, self.m2, self.l2, self.lc1, self.lc2)
 
             if method == "PID":
-                self.control_func = control_pid;
-                kp, ki, kd = 0, 0, 0
-                try:
-                    kp = float(self.kp_var.get());ki = float(self.ki_var.get());kd = float(
-                        self.kd_var.get()); self.kp_val, self.ki_val, self.kd_val = kp, ki, kd
+                self.control_func = control_pid
+                try:  # Read all 6 gains
+                    kp1 = float(self.kp_q1_var.get());
+                    ki1 = float(self.ki_q1_var.get());
+                    kd1 = float(self.kd_q1_var.get())
+                    kp2 = float(self.kp_q2_var.get());
+                    ki2 = float(self.ki_q2_var.get());
+                    kd2 = float(self.kd_q2_var.get())
+                    self.kp_q1_val, self.ki_q1_val, self.kd_q1_val = kp1, ki1, kd1
+                    self.kp_q2_val, self.ki_q2_val, self.kd_q2_val = kp2, ki2, kd2
                 except ValueError:
-                    messagebox.showerror("Invalid Input", "PID gains numbers."); self._applying_params = False; return
+                    messagebox.showerror("Invalid Input", "PID gains invalid.");self._applying_params = False;return
+
                 self.current_controller_state = DEFAULT_CONTROLLER_PARAMS['pid'].copy()
-                self.current_controller_state['Kp'] = kp;
-                self.current_controller_state['Ki'] = ki;
-                self.current_controller_state['Kd'] = kd
-                self.current_controller_state['dt'] = self.dt;
-                self.current_controller_state['integral_error'] = 0.0
-                # --- Use target_q2 here ---
-                self.current_controller_state['target_q2'] = target_q2;
+                # Set all 6 gains in controller state
+                self.current_controller_state['Kp_q1'] = self.kp_q1_val;
+                self.current_controller_state['Ki_q1'] = self.ki_q1_val;
+                self.current_controller_state['Kd_q1'] = self.kd_q1_val
+                self.current_controller_state['Kp_q2'] = self.kp_q2_val;
+                self.current_controller_state['Ki_q2'] = self.ki_q2_val;
+                self.current_controller_state['Kd_q2'] = self.kd_q2_val
+
+                self.current_controller_state['dt'] = self.dt
+                self.current_controller_state['integral_error_q1'] = 0.0  # Initialize both integrals
+                self.current_controller_state['integral_error_q2'] = 0.0
+                self.current_controller_state['target_state'] = self.target_state  # Pass full target state
                 self.current_controller_state['u_eq'] = u_eq
-                # --- Use target_q2 in status message ---
-                self.status_var.set(f"PID+FF (Kp={kp:.1f},Ki={ki:.1f},Kd={kd:.1f},Tq2={target_q2:.2f})")
+                self.status_var.set(
+                    f"State PID+FF (Kpq1={kp1:.1f},Kiq1={ki1:.1f},Kdq1={kd1:.1f} | Kpq2={kp2:.1f},Kiq2={ki2:.1f},Kdq2={kd2:.1f})")
             elif method == "LQR":
                 self.control_func = control_lqr;
                 Q = DEFAULT_CONTROLLER_PARAMS['lqr']['Q'];
                 R = DEFAULT_CONTROLLER_PARAMS['lqr']['R']
-                # --- Use target_q1, target_q2 here ---
                 K, u_eq_lqr = calculate_lqr_gain(self.m1, self.l1, self.m2, self.l2, self.lc1, self.lc2, self.I1,
-                                                 self.I2, Q, R, q1_eq=target_q1, q2_eq=target_q2)
+                                                 self.I2, Q, R, q1_eq=tq1, q2_eq=tq2)
                 if K is not None:
                     self.current_controller_state = DEFAULT_CONTROLLER_PARAMS['lqr'].copy();
                     self.current_controller_state['K'] = K
                     self.current_controller_state['target_state'] = self.target_state;
                     self.current_controller_state['u_eq'] = u_eq_lqr
-                    # --- Use target_q1, target_q2 in status message ---
-                    self.status_var.set(f"LQR (Tq1={target_q1:.2f},Tq2={target_q2:.2f})")
+                    self.status_var.set(f"LQR (Tq1={tq1:.2f},Tq2={tq2:.2f})")
                 else:
                     self.control_func = control_none;self.control_method_var.set("None");self.status_var.set("LQR Fail")
             else:
-                self.control_func = control_none; self.status_var.set("No control")
+                self.control_func = control_none;self.status_var.set("No control")
 
             if self.anim is None:
                 self.start_animation()
             else:
-                self.init_animation(); self.start_animation()
+                self.init_animation();self.start_animation()
         except ValueError as e:
-            messagebox.showerror("Invalid Input", str(e)); self.status_var.set(f"Error: {e}")
+            messagebox.showerror("Invalid Input", str(e));self.status_var.set(f"Error: {e}")
         except Exception as e:
-            messagebox.showerror("Error", f"Unexpected error: {e}"); self.status_var.set(
-                f"Error: {e}"); traceback.print_exc()
+            messagebox.showerror("Error", f"Unexpected error: {e}");self.status_var.set(
+                f"Error: {e}");traceback.print_exc()
         finally:
             self._applying_params = False
 
@@ -227,7 +255,7 @@ class PendubotApp:
         self.running = False
         if self.anim:
             try:
-                self.anim.event_source.stop()
+                self.anim.event_source.stop();
             except Exception:
                 pass
         popup = tk.Toplevel(self.root);
@@ -240,58 +268,54 @@ class PendubotApp:
                           justify=tk.CENTER)
         label.pack(pady=10, padx=10)
 
-        def restart_and_close():
-            popup.destroy(); self.apply_parameters()
+        def restart_and_close(): popup.destroy();self.apply_parameters()
 
         restart_button = ttk.Button(popup, text="Restart", command=restart_and_close)
-        restart_button.pack(pady=5)
+        restart_button.pack(pady=5);
         self.root.wait_window(popup)
 
     def simulation_step(self):
         if not self.running: return
         try:
-            def check_acceleration_event_local(t, y, m1_arg, l1_arg, m2_arg, l2_arg, lc1_arg, lc2_arg, I1_arg, I2_arg,
-                                               control_func_ref, controller_state_ref):
-                q1_std, q2_std, dq1_std, dq2_std = y
-                tau1 = control_func_ref(t, y, controller_state_ref)
-                s1, c1 = np.sin(q1_std), np.cos(q1_std);
-                s2, c2 = np.sin(q2_std), np.cos(q2_std);
-                s12 = np.sin(q1_std + q2_std)
-                m11 = m1_arg * lc1_arg ** 2 + m2_arg * (
-                            l1_arg ** 2 + lc2_arg ** 2 + 2 * l1_arg * lc2_arg * c2) + I1_arg + I2_arg
-                m12 = m2_arg * (lc2_arg ** 2 + l1_arg * lc2_arg * c2) + I2_arg;
-                m22 = m2_arg * lc2_arg ** 2 + I2_arg
-                M_event = np.array([[m11, m12], [m12, m22]])
-                c1t = -m2_arg * l1_arg * lc2_arg * s2 * dq2_std ** 2 - 2 * m2_arg * l1_arg * lc2_arg * s2 * dq1_std * dq2_std;
-                c2t = m2_arg * l1_arg * lc2_arg * s2 * dq1_std ** 2
-                C_event = np.array([c1t, c2t])
-                g1t = (m1_arg * lc1_arg + m2_arg * l1_arg) * G * s1 + m2_arg * lc2_arg * G * s12;
-                g2t = m2_arg * lc2_arg * G * s12
-                Grav_event = np.array([g1t, g2t]);
-                Torques_event = np.array([tau1, 0.0])
+            def check_acceleration_event_local(t, y, m1_a, l1_a, m2_a, l2_a, lc1_a, lc2_a, I1_a, I2_a, ctrl_f_ref,
+                                               ctrl_s_ref):
+                q1s, q2s, dq1s, dq2s = y;
+                tau1 = ctrl_f_ref(t, y, ctrl_s_ref)
+                s1, c1 = np.sin(q1s), np.cos(q1s);
+                s2, c2 = np.sin(q2s), np.cos(q2s);
+                s12 = np.sin(q1s + q2s)
+                m11 = m1_a * lc1_a ** 2 + m2_a * (l1_a ** 2 + lc2_a ** 2 + 2 * l1_a * lc2_a * c2) + I1_a + I2_a
+                m12 = m2_a * (lc2_a ** 2 + l1_a * lc2_a * c2) + I2_a;
+                m22 = m2_a * lc2_a ** 2 + I2_a
+                M = np.array([[m11, m12], [m12, m22]])
+                c1t = -m2_a * l1_a * lc2_a * s2 * dq2s ** 2 - 2 * m2_a * l1_a * lc2_a * s2 * dq1s * dq2s;
+                c2t = m2_a * l1_a * lc2_a * s2 * dq1s ** 2
+                C = np.array([c1t, c2t])
+                g1t = (m1_a * lc1_a + m2_a * l1_a) * G * s1 + m2_a * lc2_a * G * s12;
+                g2t = m2_a * lc2_a * G * s12
+                Grav = np.array([g1t, g2t]);
+                Torques = np.array([tau1, 0.0])
                 try:
-                    RHS_event = Torques_event - C_event - Grav_event; ddq_event = np.linalg.solve(M_event, RHS_event)
+                    RHS = Torques - C - Grav;ddq = np.linalg.solve(M, RHS)
                 except np.linalg.LinAlgError:
                     return -1.0
-                current_max_abs_acc = max(abs(ddq_event[0]), abs(ddq_event[1]))
-                return self.ABNORMAL_ACCELERATION_THRESHOLD - current_max_abs_acc
+                return self.ABNORMAL_ACCELERATION_THRESHOLD - max(abs(ddq[0]), abs(ddq[1]))
 
-            check_acceleration_event_local.terminal = True
+            check_acceleration_event_local.terminal = True;
             check_acceleration_event_local.direction = -1
-
             common_args = (self.m1, self.l1, self.m2, self.l2, self.lc1, self.lc2, self.I1, self.I2, self.control_func,
                            self.current_controller_state)
             sol = scipy.integrate.solve_ivp(pendubot_dynamics, [self.simulation_time, self.simulation_time + self.dt],
                                             self.state, method='RK45', t_eval=[self.simulation_time + self.dt],
                                             args=common_args, events=check_acceleration_event_local)
             if sol.status == 1:
-                if sol.t_events and sol.t_events[0].size > 0: self.show_abnormal_acceleration_popup(); return
+                if sol.t_events and sol.t_events[0].size > 0: self.show_abnormal_acceleration_popup();return
             if sol.status != 0 and sol.status != 1:
                 print(f"Solver fail (Status {sol.status}): {sol.message}")
             else:
                 if sol.y.shape[1] > 0: self.state = sol.y[:, -1]
             if not np.all(np.isfinite(self.state)): print(
-                f"WARNING: Invalid state t={self.simulation_time}: {self.state}"); self.running = False; return
+                f"WARNING: Invalid state t={self.simulation_time}: {self.state}");self.running = False;return
             self.simulation_time += self.dt
             self.time_history.append(self.simulation_time);
             self.q1_history.append(self.state[0])
@@ -301,7 +325,7 @@ class PendubotApp:
             while len(self.time_history) > self.history_length + 50: self.time_history.pop(0);self.q1_history.pop(
                 0);self.q2_history.pop(0);self.dq1_history.pop(0);self.dq2_history.pop(0)
         except Exception as e:
-            print(f"Error during simulation step: {e}"); traceback.print_exc(); self.running = False
+            print(f"Error during simulation step: {e}");traceback.print_exc();self.running = False
 
     def init_animation(self):
         if hasattr(self, 'line1') and self.line1: self.line1.set_data([], [])
@@ -335,7 +359,7 @@ class PendubotApp:
                 self.ax_vis.set_ylim(-max_len, max_len)
                 self.ax_vis.figure.canvas.draw()
         except Exception as e:
-            print(f"Error in update_visualization: {e}"); traceback.print_exc(); self.running = False
+            print(f"Error in update_visualization: {e}");traceback.print_exc();self.running = False
 
     def update_plots(self, initial_draw=False):
         if not hasattr(self, 'plot_q1') or not hasattr(self, 'axs_plots'): return
@@ -353,7 +377,7 @@ class PendubotApp:
             dq1 = dq1_hist[-self.history_length:];
             dq2 = dq2_hist[-self.history_length:]
         except Exception as e:
-            print(f"Error accessing history: {e}"); self.running = False; return
+            print(f"Error accessing history: {e}");self.running = False;return
         plot_lines = [self.plot_q1, self.plot_q2, self.plot_dq1, self.plot_dq2];
         plot_data_y = [q1, q2, dq1, dq2]
         is_effectively_empty = len(t) == 0 or (len(t) == 1 and t[0] == 0.0 and not any(
@@ -384,13 +408,13 @@ class PendubotApp:
                 needs_canvas_draw = True
             if needs_canvas_draw: self.canvas_plots.draw()
         except Exception as e:
-            print(f"Error updating plot limits: {e}"); traceback.print_exc(); self.running = False
+            print(f"Error updating plot limits: {e}");traceback.print_exc();self.running = False
 
     def animation_frame(self, frame):
         if not self.running:
             if self.anim:
                 try:
-                    self.anim.event_source.stop()
+                    self.anim.event_source.stop();
                 except Exception:
                     pass
             return []
@@ -407,7 +431,7 @@ class PendubotApp:
             if hasattr(self, 'plot_dq2') and self.plot_dq2: updated_artists.append(self.plot_dq2)
         if not self.running and self.anim:
             try:
-                self.anim.event_source.stop()
+                self.anim.event_source.stop();
             except Exception:
                 pass
         return updated_artists
@@ -415,15 +439,15 @@ class PendubotApp:
     def start_animation(self):
         if self.anim:
             try:
-                self.anim.event_source.stop()
+                self.anim.event_source.stop();
             except Exception:
                 pass
         self.running = True;
         interval_ms = max(1, int(self.dt * 1000))
         if not hasattr(self, 'fig_vis') or not hasattr(self, 'canvas_vis'): print(
-            "ERROR: Vis figure not init."); self.running = False; return
+            "ERROR: Vis figure not init.");self.running = False;return
         if not hasattr(self, 'fig_plots') or not hasattr(self, 'canvas_plots'): print(
-            "ERROR: Plot figure/canvas not init."); self.running = False; return
+            "ERROR: Plot figure/canvas not init.");self.running = False;return
         self.anim = FuncAnimation(self.fig_vis, self.animation_frame, init_func=self.init_animation, frames=None,
                                   interval=interval_ms, blit=True, repeat=True, cache_frame_data=False, save_count=0)
 
@@ -438,7 +462,7 @@ if __name__ == "__main__":
         app.running = False
         if app.anim:
             try:
-                app.anim.event_source.stop()
+                app.anim.event_source.stop();
             except Exception:
                 pass
         root.quit();
