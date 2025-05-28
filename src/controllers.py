@@ -44,11 +44,11 @@ def control_pid(t, x, controller_state):
     target_state = params.get('target_state', np.zeros(4))
     target_q1, target_q2, target_dq1, target_dq2 = target_state
 
-    Kp_q1 = params.get('Kp_q1', 0.0);
-    Ki_q1 = params.get('Ki_q1', 0.0);
+    Kp_q1 = params.get('Kp_q1', 0.0)
+    Ki_q1 = params.get('Ki_q1', 0.0)
     Kd_q1 = params.get('Kd_q1', 0.0)
-    Kp_q2 = params.get('Kp_q2', 0.0);
-    Ki_q2 = params.get('Ki_q2', 0.0);
+    Kp_q2 = params.get('Kp_q2', 0.0)
+    Ki_q2 = params.get('Ki_q2', 0.0)
     Kd_q2 = params.get('Kd_q2', 0.0)
 
     u_eq = params.get('u_eq', 0.0)
@@ -79,8 +79,7 @@ def control_pid(t, x, controller_state):
     derivative_error_q2 = target_dq2 - dq2  # Effectively -dq2
 
     # --- PID Feedback Calculation ---
-    # Apply Kp terms with a NEGATIVE sign, as per user observation that negative Kp works better
-    # This means if Kp_q1 (from GUI, intended as positive magnitude) is, e.g., 5, it acts as -5.
+    # Apply Kp terms with a NEGATIVE sign
     feedback_q1 = (-Kp_q1 * error_q1) + (Ki_q1 * integral_error_q1) + (Kd_q1 * derivative_error_q1)
     feedback_q2 = (-Kp_q2 * error_q2) + (Ki_q2 * integral_error_q2) + (Kd_q2 * derivative_error_q2)
 
@@ -126,27 +125,27 @@ def calculate_lqr_gain(m1, l1, m2, l2, lc1, lc2, I1, I2, Q, R, q1_eq, q2_eq):
         return pendubot_dynamics(0, x_standard, m1, l1, m2, l2, lc1, lc2, I1, I2,
                                  lambda t, state, ctrl_state: u_val, {})[:4]
 
-    A = np.zeros((4, 4));
+    A = np.zeros((4, 4))
     B = np.zeros((4, 1))
     try:
         for i in range(4):
-            x_plus = x_eq.copy();
-            x_plus[i] += epsilon;
-            x_minus = x_eq.copy();
+            x_plus = x_eq.copy()
+            x_plus[i] += epsilon
+            x_minus = x_eq.copy()
             x_minus[i] -= epsilon
             A[:, i] = (dynamics_wrapper(x_plus, u_eq_lin[0]) - dynamics_wrapper(x_minus, u_eq_lin[0])) / (2 * epsilon)
-        u_plus = u_eq_lin[0] + epsilon;
+        u_plus = u_eq_lin[0] + epsilon
         u_minus = u_eq_lin[0] - epsilon
         B[:, 0] = (dynamics_wrapper(x_eq, u_plus) - dynamics_wrapper(x_eq, u_minus)) / (2 * epsilon)
     except Exception as e:
-        print(f"ERROR during LQR A/B differentiation: {e}");
-        traceback.print_exc();
+        print(f"ERROR during LQR A/B differentiation: {e}")
+        traceback.print_exc()
         return None, None
     try:
         K, S, E = control.lqr(A, B, Q, R)
         if K.ndim == 1: K = K.reshape(1, -1)
         return K, u_eq
     except Exception as e:
-        print(f"ERROR computing LQR gain: {e}");
-        traceback.print_exc();
+        print(f"ERROR computing LQR gain: {e}")
+        traceback.print_exc()
         return None, None
