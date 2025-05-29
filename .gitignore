@@ -185,6 +185,7 @@ fabric.properties
 .idea
 .idea/misc.xml
 .idea/workspace.xml
-/src/ppo_pendubot_logs/
-/src/ppo_pendubot_tensorboard/
+/data/ppo_pendubot_logs/
+/data/ppo_pendubot_tensorboard/
 /old_runs/
+/data/ppo_pendubot_logs/

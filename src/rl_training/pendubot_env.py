@@ -4,7 +4,7 @@ import numpy as np
 import scipy.integrate
 import traceback
 
-from pendubot_dynamics import pendubot_dynamics, G
+from src.core_logic.pendubot_dynamics import pendubot_dynamics, G
 
 VALID_TARGET_CONFIGS = [
     (np.pi, 0.0),  # L1 Up, L2 Align (Visually Up-Up)

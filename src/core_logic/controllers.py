@@ -1,6 +1,6 @@
 import numpy as np
 import control  # For LQR
-from pendubot_dynamics import pendubot_dynamics, G  # Use G for equilibrium torque
+from .pendubot_dynamics import pendubot_dynamics, G  # Use G for equilibrium torque
 import traceback
 
 # --- Default Controller Parameters ---

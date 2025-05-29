@@ -17,8 +17,8 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import traceback
 
-from pendubot_dynamics import pendubot_dynamics, G
-from controllers import (control_none, control_pid, control_lqr,
+from src.core_logic.pendubot_dynamics import pendubot_dynamics, G
+from src.core_logic.controllers import (control_none, control_pid, control_lqr,
                          calculate_lqr_gain, DEFAULT_CONTROLLER_PARAMS,
                          calculate_equilibrium_torque)
 from gui_components import (setup_visualization_area, setup_plotting_area,
@@ -295,10 +295,10 @@ class PendubotApp:
                     self.status_var.set("PPO Failed: Library missing.")
                 else:
                     try:
-                        model_path = "ppo_pendubot_model.zip"  # Assuming it's in the same directory
+                        model_path = "../../data/ppo_pendubot_model.zip"  # Assuming it's in the same directory
                         if not os.path.exists(model_path):
                             # Try looking in the log directory as a fallback
-                            log_model_path = os.path.join("ppo_pendubot_logs", "ppo_pendubot_model.zip")
+                            log_model_path = os.path.join("../../data/ppo_pendubot_logs", "ppo_pendubot_model.zip")
                             if os.path.exists(log_model_path):
                                 model_path = log_model_path
                             else:

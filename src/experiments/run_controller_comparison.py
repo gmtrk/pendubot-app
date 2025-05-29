@@ -5,10 +5,10 @@ import pandas as pd
 import traceback
 
 try:
-    from pendubot_dynamics import pendubot_dynamics, G
-    from controllers import (control_none, control_pid, control_lqr,
-                             calculate_lqr_gain, DEFAULT_CONTROLLER_PARAMS,
-                             calculate_equilibrium_torque)
+    from src.core_logic.pendubot_dynamics import pendubot_dynamics, G
+    from src.core_logic.controllers import (control_none, control_pid, control_lqr,
+                                            calculate_lqr_gain, DEFAULT_CONTROLLER_PARAMS,
+                                            calculate_equilibrium_torque)
 except ImportError:
     print("ERROR: Could not import project modules (pendubot_dynamics, controllers).")
     print("Ensure this script is in the correct directory or PYTHONPATH is set.")
@@ -116,9 +116,9 @@ class HeadlessPendubotSimulator:
             self.control_func = self._control_ppo_headless
             if self.ppo_model is None:
                 try:
-                    model_path = "ppo_pendubot_model.zip"
+                    model_path = "../../data/ppo_pendubot_model.zip"
                     if not os.path.exists(model_path):
-                        model_path = os.path.join("ppo_pendubot_logs", "ppo_pendubot_model.zip")
+                        model_path = os.path.join("../../data/ppo_pendubot_logs", "ppo_pendubot_model.zip")
                     if not os.path.exists(model_path):
                         print(f"    PPO model not found at {model_path} or in logs/. Skipping PPO test.")
                         return False
@@ -357,7 +357,7 @@ def perform_experiments():
     pd.set_option('display.width', 120)
     print(results_df.to_string(index=False))
 
-    csv_filename = "pendubot_controller_comparison_results.csv"
+    csv_filename = "../../data/pendubot_controller_comparison_results.csv"
     try:
         results_df.to_csv(csv_filename, index=False, float_format='%.2f')
         print(f"\nResults saved to file: {csv_filename}")

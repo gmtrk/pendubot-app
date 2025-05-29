@@ -8,31 +8,29 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from pendubot_env import PendubotEnv
 
 # --- Parameters ---
-LOG_DIR = "ppo_pendubot_logs/"
+LOG_DIR = "../../data/ppo_pendubot_logs/"
 MODEL_SAVE_PATH = "ppo_pendubot_model"
-TENSORBOARD_LOG_DIR = "./ppo_pendubot_tensorboard/"
+TENSORBOARD_LOG_DIR = "../../data/ppo_pendubot_tensorboard/"
 
-TOTAL_TIMESTEPS = 10000000  # Adjust as needed (e.g., 1e6, 2e6 for better results)
+TOTAL_TIMESTEPS = 10000000  # Adjust as needed
 N_ENVS = 16 # Number of parallel environments
-SAVE_FREQ = 100000 # Save a checkpoint every N steps (adjust per N_ENVS)
+SAVE_FREQ = 100000 # Save a checkpoint every N steps
 
 def train():
     os.makedirs(LOG_DIR, exist_ok=True)
     os.makedirs(TENSORBOARD_LOG_DIR, exist_ok=True)
 
     # Create vectorized environments
-    # Using a lambda to ensure fresh environment creation for each process
     env = make_vec_env(lambda: PendubotEnv(), n_envs=N_ENVS)
 
     # Checkpoint callback
     checkpoint_callback = CheckpointCallback(
-        save_freq=max(SAVE_FREQ // N_ENVS, 1), # Adjust save_freq for n_envs
+        save_freq=max(SAVE_FREQ // N_ENVS, 1),
         save_path=LOG_DIR,
         name_prefix="ppo_pendubot_checkpoint"
     )
 
     # PPO model
-    # Hyperparameters can be tuned. These are reasonable defaults.
     model = PPO(
         "MlpPolicy",
         env,
@@ -47,7 +45,6 @@ def train():
         ent_coef=0.0,   # Entropy coefficient
         vf_coef=0.5,    # Value function coefficient
         max_grad_norm=0.5, # Max value for gradient clipping
-        # learning_rate=3e-4, # Can specify learning rate
         device="cpu" # "cuda" if GPU available, else "cpu"
     )
 
@@ -63,7 +60,7 @@ def train():
     finally:
         print(f"Saving final model to {MODEL_SAVE_PATH}.zip")
         model.save(MODEL_SAVE_PATH)
-        env.close() # Important to close vectorized environments
+        env.close()
 
     print("Training finished.")
     print(f"Model saved as {MODEL_SAVE_PATH}.zip")
