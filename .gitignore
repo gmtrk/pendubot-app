@@ -189,3 +189,4 @@ fabric.properties
 /data/ppo_pendubot_tensorboard/
 /old_runs/
 /data/ppo_pendubot_logs/
+/.idea/
