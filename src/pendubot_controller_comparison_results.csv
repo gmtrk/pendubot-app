@@ -1,0 +1,13 @@
+Target,Controller,Avg_IAE_q1,Avg_IAE_q2,Avg_ControlEffort,Avg_CompletionTime_Success,NumSuccesses
+L1_Up_L2_Align,PID,1.15,1.11,29.45,10.00,3/3
+L1_Up_L2_Align,LQR,0.05,0.05,0.75,10.00,3/3
+L1_Up_L2_Align,PPO,0.66,0.69,5.21,10.00,3/3
+L1_Down_L2_WorldUp,PID,14.74,15.51,2728.73,10.00,3/3
+L1_Down_L2_WorldUp,LQR,0.03,0.01,0.11,10.00,3/3
+L1_Down_L2_WorldUp,PPO,0.58,0.56,4.07,10.00,3/3
+L1_3pi4_L2_WorldUp,PID,2.96,1.69,748.74,10.00,2/3
+L1_3pi4_L2_WorldUp,LQR,0.10,0.23,539.08,10.00,3/3
+L1_3pi4_L2_WorldUp,PPO,5.26,3.07,337.67,10.00,3/3
+L1_-3pi4_L2_WorldUp,PID,0.49,0.59,482.09,10.00,3/3
+L1_-3pi4_L2_WorldUp,LQR,0.02,0.04,485.52,10.00,3/3
+L1_-3pi4_L2_WorldUp,PPO,1.00,1.00,386.90,10.00,3/3
