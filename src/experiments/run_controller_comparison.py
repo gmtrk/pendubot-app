@@ -248,7 +248,7 @@ class HeadlessPendubotSimulator:
             if not self.running: break
             step_successful = self._run_simulation_step()
             if not step_successful:
-                # print(f"    Episode ended prematurely at t={self.simulation_time:.2f}s.") # Reduce noise
+                # print(f"    Episode ended prematurely at t={self.simulation_time:.2f}s.")
                 self.running = False
                 return {"iae_q1": self.iae_q1, "iae_q2": self.iae_q2,
                         "control_effort": self.control_effort_integral,
@@ -276,10 +276,38 @@ def perform_experiments():
 
     pid_default_gains = DEFAULT_CONTROLLER_PARAMS['pid']
     specific_pid_setups = {
-        "L1_Up_L2_Align": {'Kp_q1': 16.0, 'Kp_q2': 26.0},
-        "L1_Down_L2_WorldUp": {'Kp_q1': 14.8, 'Kp_q2': 5.1},
-        "L1_3pi4_L2_WorldUp": {'Kp_q1': 15.4, 'Kp_q2': 22.5},
-        "L1_-3pi4_L2_WorldUp": {'Kp_q1': 19.5, 'Kp_q2': 26.0},
+        "L1_Up_L2_Align": {
+            'Kp_q1': 275.90,
+            'Ki_q1': 58.94,
+            'Kd_q1': 88.38,
+            'Kp_q2': 166.53,
+            'Ki_q2': 59.54,
+            'Kd_q2': 28.01
+        },
+        "L1_Down_L2_WorldUp": {
+            'Kp_q1': 45.97,
+            'Ki_q1': 133.04,
+            'Kd_q1': 1.28,
+            'Kp_q2': 134.05,
+            'Ki_q2': 134.42,
+            'Kd_q2': 25.86
+        },
+        "L1_3pi4_L2_WorldUp": {
+            'Kp_q1': 292.29,
+            'Ki_q1': 75.22,
+            'Kd_q1': 80.06,
+            'Kp_q2': 201.15,
+            'Ki_q2': 71.99,
+            'Kd_q2': 31.34
+        },
+        "L1_-3pi4_L2_WorldUp": {
+            'Kp_q1': 259.62,
+            'Ki_q1': 35.66,
+            'Kd_q1': 84.00,
+            'Kp_q2': 181.69,
+            'Ki_q2': 36.88,
+            'Kd_q2': 34.44
+        },
     }
 
     controllers_to_test = ["PID", "LQR"]
@@ -290,7 +318,7 @@ def perform_experiments():
 
     all_results = []
     simulator = HeadlessPendubotSimulator()
-    num_runs_per_scenario = 3
+    num_runs_per_scenario = 30
 
     for target_name, (tq1, tq2) in targets.items():
         print(f"--- Testing Target: {target_name} (q1={tq1:.2f}, q2={tq2:.2f}) ---")

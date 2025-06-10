@@ -6,7 +6,6 @@ import traceback
 # --- Default Controller Parameters ---
 DEFAULT_CONTROLLER_PARAMS = {
     'pid': {
-        # User will tune these as POSITIVE values in GUI.
         'Kp_q1': 16.0, 'Ki_q1': 0.0, 'Kd_q1': 0.0,
         'Kp_q2': 26.0, 'Ki_q2': 0.0, 'Kd_q2': 0.0,
         'max_integral_q1': 5.0,
@@ -74,14 +73,16 @@ def control_pid(t, x, controller_state):
     params['integral_error_q2'] = integral_error_q2
 
     # Derivative Terms (de/dt = d(target)/dt - d(current)/dt = 0 - dq = -dq)
-    # This provides damping if Kd is positive.
-    derivative_error_q1 = target_dq1 - dq1  # Effectively -dq1
-    derivative_error_q2 = target_dq2 - dq2  # Effectively -dq2
+    derivative_error_q1 = target_dq1 - dq1
+    derivative_error_q2 = target_dq2 - dq2
 
     # --- PID Feedback Calculation ---
-    # Apply Kp terms with a NEGATIVE sign
-    feedback_q1 = (-Kp_q1 * error_q1) + (Ki_q1 * integral_error_q1) + (Kd_q1 * derivative_error_q1)
-    feedback_q2 = (-Kp_q2 * error_q2) + (Ki_q2 * integral_error_q2) + (Kd_q2 * derivative_error_q2)
+    if target_q1 == 0 and target_q2 == np.pi:
+        feedback_q1 = (Kp_q1 * error_q1) + (Ki_q1 * integral_error_q1) + (Kd_q1 * derivative_error_q1)
+        feedback_q2 = (Kp_q2 * error_q2) + (Ki_q2 * integral_error_q2) + (Kd_q2 * derivative_error_q2)
+    else:
+        feedback_q1 = (-Kp_q1 * error_q1) + (-Ki_q1 * integral_error_q1) + (-Kd_q1 * derivative_error_q1)
+        feedback_q2 = (-Kp_q2 * error_q2) + (-Ki_q2 * integral_error_q2) + (-Kd_q2 * derivative_error_q2)
 
     pid_feedback = feedback_q1 + feedback_q2
 

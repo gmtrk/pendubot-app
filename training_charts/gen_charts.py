@@ -9,6 +9,13 @@ csv_files = [
     'rollout_ep_rew_mean.csv'
 ]
 
+plot_titles_polish = {
+    'train_entropy_loss.csv': 'Strata Entropii Treningowej',
+    'train_value_loss.csv': 'Strata Wartości Treningowej',
+    'rollout_ep_len_mean.csv': 'Średnia Długość Epizodu (Rollout)',
+    'rollout_ep_rew_mean.csv': 'Średnia Nagroda Epizodu (Rollout)'
+}
+
 output_dir = '../old_runs/charts'
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
@@ -31,7 +38,7 @@ for file_name in csv_files:
         steps = df['Step']
         values = df['Value']
 
-        plot_title = file_name.replace('_', ' ').replace('.csv', '').title()
+        plot_title = plot_titles_polish.get(file_name, file_name.replace('_', ' ').replace('.csv', '').title())
         output_file_name = os.path.join(output_dir, file_name.replace('.csv', '.png'))
 
         plt.figure(figsize=(10, 6))
@@ -39,8 +46,8 @@ for file_name in csv_files:
 
         plt.title(plot_title, fontsize=TITLE_FONT_SIZE)
 
-        plt.xlabel('Steps', fontsize=LABEL_FONT_SIZE)
-        plt.ylabel('Value', fontsize=LABEL_FONT_SIZE)
+        plt.xlabel('Kroki', fontsize=LABEL_FONT_SIZE)
+        plt.ylabel('Wartość', fontsize=LABEL_FONT_SIZE)
 
         plt.tick_params(axis='x', labelsize=TICK_FONT_SIZE)
         plt.tick_params(axis='y', labelsize=TICK_FONT_SIZE)
